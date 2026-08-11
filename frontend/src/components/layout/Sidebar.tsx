@@ -30,7 +30,7 @@ export function Sidebar() {
   const [customSymbol, setCustomSymbol] = useState("");
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/stocks")
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/stocks`)
       .then(res => res.json())
       .then(data => {
         setStocks(data);

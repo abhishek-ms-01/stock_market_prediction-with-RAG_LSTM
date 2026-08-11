@@ -24,7 +24,7 @@ export default function ForecastPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/forecast?ticker=${ticker}&horizon=${horizon}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/forecast?ticker=${ticker}&horizon=${horizon}`);
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.detail || "Forecast failed");

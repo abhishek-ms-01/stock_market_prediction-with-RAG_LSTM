@@ -27,7 +27,7 @@ export function useStockData() {
     async function fetchData() {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:8000/api/stock-data?ticker=${ticker}&period=${period}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/stock-data?ticker=${ticker}&period=${period}`);
         if (!res.ok) throw new Error("Backend not reachable or data unavailable");
         
         const json = await res.json();

@@ -45,7 +45,7 @@ export default function AIChatPage() {
     setLoading(true);
     
     try {
-      const res = await fetch(`http://localhost:8000/api/chat?ticker=${ticker}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat?ticker=${ticker}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: userMsg })

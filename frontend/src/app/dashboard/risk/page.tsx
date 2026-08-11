@@ -16,7 +16,7 @@ export default function RiskPage() {
     async function fetchRisk() {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:8000/api/risk?ticker=${ticker}&period=${period}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/risk?ticker=${ticker}&period=${period}`);
         if (!res.ok) throw new Error("Failed to fetch risk data");
         const json = await res.json();
         if (mounted) {
