@@ -103,8 +103,8 @@ def calculate_macd(series, fast=12, slow=26):
 def calculate_sma(series, window=20):
     return series.rolling(window=window).mean()
 
-def fetch_stock_data_raw(symbol: str, timeframe: str):
-    df_raw = yf.download(symbol, period=timeframe, interval="1d")
+def fetch_stock_data_raw(symbol: str, timeframe: str, interval: str = "1d"):
+    df_raw = yf.download(symbol, period=timeframe, interval=interval)
     if df_raw.empty:
         return pd.DataFrame()
     if isinstance(df_raw.columns, pd.MultiIndex):
@@ -234,7 +234,7 @@ def get_forecast(ticker: str, horizon: str):
 
     # --- INTRADAY ---
     if horizon != "1d":
-        df_intra_raw = fetch_stock_data_raw(ticker, "5d")
+        df_intra_raw = fetch_stock_data_raw(ticker, "5d", interval="5m")
         if df_intra_raw.empty:
             raise HTTPException(status_code=404, detail="Intraday data unavailable")
             
