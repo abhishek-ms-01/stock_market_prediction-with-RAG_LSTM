@@ -1,14 +1,10 @@
 pandas
 numpy
-matplotlib
 yfinance
 newsapi-python
 nltk
-tensorflow
-streamlit
-ta
+tensorflow-cpu
 scikit-learn
-plotly
 fastapi
 uvicorn
 pydantic
