@@ -1,0 +1,15 @@
+pandas
+numpy
+matplotlib
+yfinance
+newsapi-python
+nltk
+tensorflow
+streamlit
+ta
+scikit-learn
+plotly
+fastapi
+uvicorn
+pydantic
+python-dotenv

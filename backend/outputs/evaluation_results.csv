@@ -1,0 +1,5 @@
+Model Variant,Features Count,Accuracy,Precision,Recall,F1-Score,ROC-AUC,Confusion Matrix,Inference Latency (ms/sample)
+LSTM Only (Technical),8,0.9048,0.913,0.913,0.913,0.9405,"[[17, 2], [2, 21]]",9.157
+LSTM + Sentiment,9,0.881,0.875,0.913,0.8936,0.9405,"[[16, 3], [2, 21]]",6.141
+LSTM + Event Detection,9,0.9286,0.9167,0.9565,0.9362,0.9519,"[[17, 2], [1, 22]]",7.744
+Hybrid Time-Aware RAG-LSTM,16,0.9048,0.88,0.9565,0.9167,0.9291,"[[16, 3], [1, 22]]",6.332
