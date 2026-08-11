@@ -166,30 +166,35 @@ def get_stock_data(ticker: str = "RELIANCE.NS", period: str = "6mo"):
 
 class ChatRequest(BaseModel):
     query: str
-    ticker: str
-    close: float
-    rsi: float
-    macd: float
-    confidence: float
 
 chatbot_instance = None
 
 @app.post("/api/chat")
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, ticker: str = "RELIANCE.NS"):
     global chatbot_instance
     if chatbot_instance is None:
         chatbot_instance = StockAssistantChatbot()
         
-    stock_ctx = {
-        "stock": req.ticker,
-        "close": req.close,
-        "rsi": req.rsi,
-        "macd": req.macd,
-        "confidence": req.confidence
-    }
-    
-    response = chatbot_instance.get_response(req.query, stock_ctx)
-    return {"response": response, "doc_count": chatbot_instance.rag_engine.get_doc_count()}
+    try:
+        df = process_stock_data(ticker, "6mo")
+        latest = df.iloc[-1]
+        stock_ctx = {
+            "stock": ticker,
+            "close": float(latest["Close"]),
+            "rsi": float(latest["RSI"]),
+            "macd": float(latest["MACD"]),
+            "confidence": 0.85
+        }
+    except Exception:
+        stock_ctx = {"stock": ticker, "close": 0.0, "rsi": 50.0, "macd": 0.0, "confidence": 0.5}
+        
+    try:
+        response = chatbot_instance.get_response(req.query, stock_ctx)
+        doc_count = chatbot_instance.rag_engine.get_doc_count() if hasattr(chatbot_instance.rag_engine, 'get_doc_count') else 0
+        return {"response": response, "doc_count": doc_count}
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=str(traceback.format_exc()))
 
 # Forecast endpoint logic
 import tensorflow as tf
@@ -200,133 +205,133 @@ model_instance = None
 
 @app.get("/api/forecast")
 def get_forecast(ticker: str, horizon: str):
-    global model_instance
-    if model_instance is None:
-        model_path = os.path.join(os.path.dirname(__file__), "app", "models", "lstm_model.h5")
-        if not os.path.exists(model_path):
-            model_path = os.path.join(os.path.dirname(__file__), "models", "lstm_model.h5")
-        if os.path.exists(model_path):
-            with tf.device('/CPU:0'):
-                model_instance = load_model(model_path, compile=False)
-        else:
-            raise HTTPException(status_code=500, detail="Model not found on disk")
-            
-    # Replicate the intraday vs daily branching logic exactly
-    horizon_options = {
-        "5m": 5,
-        "15m": 15,
-        "30m": 30,
-        "60m": 60,
-        "1d": 0
-    }
-    
-    if horizon not in horizon_options:
-        raise HTTPException(status_code=400, detail="Invalid horizon")
-        
-    horizon_mins = horizon_options[horizon]
-    features = [
-        'RSI', 'MACD', 'Return', 'MA_20_ratio', 'Close_Open',
-        'High_Low', 'Volume_ratio', 'Momentum_Factor',
-        'Sentiment', 'Event',
-        'RAG_Sentiment', 'RAG_Relevance', 'RAG_Event_Importance',
-        'RAG_Market_Impact', 'RAG_Risk_Score', 'RAG_Confidence'
-    ]
-
-    # --- INTRADAY ---
-    if horizon != "1d":
-        df_intra_raw = fetch_stock_data_raw(ticker, "5d", interval="5m")
-        if df_intra_raw.empty:
-            raise HTTPException(status_code=404, detail="Intraday data unavailable")
-            
-        df_intra = df_intra_raw.copy()
-        for c in ['Open', 'High', 'Low', 'Close', 'Volume']:
-            if c in df_intra.columns and isinstance(df_intra[c], pd.DataFrame):
-                df_intra[c] = df_intra[c].iloc[:, 0]
+    try:
+        global model_instance
+        if model_instance is None:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            model_path = os.path.join(base_dir, "models", "lstm_model.h5")
+            if not os.path.exists(model_path):
+                model_path = os.path.join(base_dir, "app", "models", "lstm_model.h5")
+            if os.path.exists(model_path):
+                with tf.device('/CPU:0'):
+                    model_instance = load_model(model_path, compile=False)
+            else:
+                raise HTTPException(status_code=500, detail=f"Model not found on disk at {model_path}")
                 
-        ci = df_intra['Close'].astype(float)
-        oi = df_intra['Open'].astype(float)
-        hi = df_intra['High'].astype(float)
-        li = df_intra['Low'].astype(float)
-        vi = df_intra['Volume'].astype(float)
-
-        df_intra['RSI'] = calculate_rsi(ci)
-        df_intra['MACD'] = calculate_macd(ci)
-        df_intra['MA_20'] = calculate_sma(ci, window=20)
-        df_intra['Return'] = ci.pct_change()
-        df_intra['MA_20_ratio'] = ci / df_intra['MA_20'] - 1
-        df_intra['Close_Open'] = ci / oi - 1
-        df_intra['High_Low'] = hi / li - 1
-        df_intra['Volume_ratio'] = vi / vi.rolling(10).mean() - 1
-        df_intra['Volatility'] = df_intra['Return'].rolling(10).std()
-        df_intra['Momentum_Factor'] = df_intra['Return'].apply(lambda x: 1.0 if x > 0 else 0.0)
-        df_intra['Sentiment'] = 0.0
-        df_intra['Event'] = 0
-        df_intra['RAG_Sentiment'] = 0.0
-        df_intra['RAG_Relevance'] = 0.5
-        df_intra['RAG_Event_Importance'] = 0.4
-        df_intra['RAG_Market_Impact'] = 0.1
-        df_intra['RAG_Risk_Score'] = 0.1
-        df_intra['RAG_Confidence'] = 0.5
-        df_intra.dropna(inplace=True)
-
-        if len(df_intra) < 5:
-            raise HTTPException(status_code=400, detail="Insufficient data for 5-step lookback.")
-            
-        date_col = 'Datetime' if 'Datetime' in df_intra.columns else ('Date' if 'Date' in df_intra.columns else df_intra.columns[0])
-        last_time = pd.to_datetime(df_intra[date_col].iloc[-1])
-        target_time = last_time + pd.Timedelta(minutes=horizon_mins)
-        current_price = float(df_intra['Close'].iloc[-1])
-
-        scaler_i = MinMaxScaler()
-        Xi = scaler_i.fit_transform(df_intra[features])
-        seq = np.expand_dims(Xi[-5:], axis=0).astype(np.float32)
-        
-        with tf.device('/CPU:0'):
-            raw_score = float(model_instance(seq, training=False).numpy()[0][0])
-            
-        vol_avg = df_intra['Volatility'].mean()
-        if np.isnan(vol_avg): vol_avg = 0.002
-        move_pct = (raw_score - 0.5) * 2.0 * vol_avg * np.sqrt(horizon_mins / 15.0)
-        target_price = current_price * (1.0 + move_pct)
-        direction = "UP" if raw_score > 0.5 else "DOWN"
-        
-        fdf = pd.DataFrame(df_intra[features].tail(5))
-        fdf.index = [f"Bar -{4-i}" for i in range(5)]
-        
-        return {
-            "score": raw_score,
-            "direction": direction,
-            "current_price": current_price,
-            "target_price": target_price,
-            "move_pct": move_pct,
-            "target_time": target_time.strftime("%H:%M:%S"),
-            "horizon_mins": horizon_mins,
-            "features": fdf.to_dict(orient="index")
+        # Replicate the intraday vs daily branching logic exactly
+        horizon_options = {
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "60m": 60,
+            "1d": 0
         }
+        
+        if horizon not in horizon_options:
+            raise HTTPException(status_code=400, detail="Invalid horizon")
+            
+        horizon_mins = horizon_options[horizon]
+        features = [
+            'RSI', 'MACD', 'Return', 'MA_20_ratio', 'Close_Open',
+            'High_Low', 'Volume_ratio', 'Momentum_Factor',
+            'Sentiment', 'Event',
+            'RAG_Sentiment', 'RAG_Relevance', 'RAG_Event_Importance',
+            'RAG_Market_Impact', 'RAG_Risk_Score', 'RAG_Confidence'
+        ]
 
-    # --- DAILY ---
-    else:
-        df = process_stock_data(ticker, "6mo")
-        if len(df) < 5:
-            raise HTTPException(status_code=400, detail="Insufficient data for 5-day lookback.")
+        # --- INTRADAY ---
+        if horizon != "1d":
+            df_intra_raw = fetch_stock_data_raw(ticker, "5d", interval="5m")
+            if df_intra_raw.empty:
+                raise HTTPException(status_code=404, detail="Intraday data unavailable")
+                
+            df_intra = df_intra_raw.copy()
+            for c in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                if c in df_intra.columns and isinstance(df_intra[c], pd.DataFrame):
+                    df_intra[c] = df_intra[c].iloc[:, 0]
+                    
+            ci = df_intra['Close'].astype(float)
+            oi = df_intra['Open'].astype(float)
+            hi = df_intra['High'].astype(float)
+            li = df_intra['Low'].astype(float)
+            vi = df_intra['Volume'].astype(float)
+
+            df_intra['RSI'] = calculate_rsi(ci)
+            df_intra['MACD'] = calculate_macd(ci)
+            df_intra['MA_20'] = calculate_sma(ci, window=20)
+            df_intra['Return'] = ci.pct_change()
+            df_intra['MA_20_ratio'] = ci / df_intra['MA_20'] - 1
+            df_intra['Close_Open'] = ci / oi - 1
+            df_intra['High_Low'] = hi / li - 1
+            df_intra['Volume_ratio'] = vi / vi.rolling(10).mean() - 1
+            df_intra['Volatility'] = df_intra['Return'].rolling(10).std()
+            df_intra['Momentum_Factor'] = df_intra['Return'].apply(lambda x: 1.0 if x > 0 else 0.0)
+            for col in ['Sentiment', 'Event', 'RAG_Sentiment', 'RAG_Relevance', 'RAG_Event_Importance', 'RAG_Market_Impact', 'RAG_Risk_Score', 'RAG_Confidence']:
+                if col not in df_intra.columns:
+                    df_intra[col] = 0.5
+            df_intra.dropna(inplace=True)
+
+            if len(df_intra) < 5:
+                raise HTTPException(status_code=400, detail="Insufficient data for 5-step lookback.")
+                
+            date_col = 'Datetime' if 'Datetime' in df_intra.columns else ('Date' if 'Date' in df_intra.columns else df_intra.columns[0])
+            last_time = pd.to_datetime(df_intra[date_col].iloc[-1])
+            target_time = last_time + pd.Timedelta(minutes=horizon_mins)
+            current_price = float(df_intra['Close'].iloc[-1])
+
+            scaler_i = MinMaxScaler()
+            Xi = scaler_i.fit_transform(df_intra[features])
+            seq = np.expand_dims(Xi[-5:], axis=0).astype(np.float32)
             
-        scaler = MinMaxScaler()
-        Xs = scaler.fit_transform(df[features])
-        seq = np.expand_dims(Xs[-5:], axis=0).astype(np.float32)
-        
-        with tf.device('/CPU:0'):
-            score = float(model_instance(seq, training=False).numpy()[0][0])
+            with tf.device('/CPU:0'):
+                raw_score = float(model_instance(seq, training=False).numpy()[0][0])
+                
+            vol_avg = df_intra['Volatility'].mean()
+            if np.isnan(vol_avg): vol_avg = 0.002
+            move_pct = (raw_score - 0.5) * 2.0 * vol_avg * np.sqrt(horizon_mins / 15.0)
+            target_price = current_price * (1.0 + move_pct)
+            direction = "UP" if raw_score > 0.5 else "DOWN"
             
-        direction = "UP" if score > 0.5 else "DOWN"
-        
-        fdf = pd.DataFrame(df[features].tail(5))
-        fdf.index = [f"Day -{4-i}" for i in range(5)]
-        
-        return {
-            "score": score,
-            "direction": direction,
-            "features": fdf.to_dict(orient="index")
-        }
+            fdf = pd.DataFrame(df_intra[features].tail(5))
+            fdf.index = [f"Bar -{4-i}" for i in range(5)]
+            
+            return {
+                "score": raw_score,
+                "direction": direction,
+                "current_price": current_price,
+                "target_price": target_price,
+                "move_pct": move_pct,
+                "target_time": target_time.strftime("%H:%M:%S"),
+                "horizon_mins": horizon_mins,
+                "features": fdf.to_dict(orient="index")
+            }
+
+        # --- DAILY ---
+        else:
+            df = process_stock_data(ticker, "6mo")
+            if len(df) < 5:
+                raise HTTPException(status_code=400, detail="Insufficient data for 5-day lookback.")
+                
+            scaler = MinMaxScaler()
+            Xs = scaler.fit_transform(df[features])
+            seq = np.expand_dims(Xs[-5:], axis=0).astype(np.float32)
+            
+            with tf.device('/CPU:0'):
+                score = float(model_instance(seq, training=False).numpy()[0][0])
+                
+            direction = "UP" if score > 0.5 else "DOWN"
+            
+            fdf = pd.DataFrame(df[features].tail(5))
+            fdf.index = [f"Day -{4-i}" for i in range(5)]
+            
+            return {
+                "score": score,
+                "direction": direction,
+                "features": fdf.to_dict(orient="index")
+            }
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=str(traceback.format_exc()))
 
 @app.get("/api/indicators")
 def get_indicators(ticker: str, period: str = "6mo"):
