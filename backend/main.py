@@ -213,8 +213,33 @@ def get_forecast(ticker: str, horizon: str):
             if not os.path.exists(model_path):
                 model_path = os.path.join(base_dir, "app", "models", "lstm_model.h5")
             if os.path.exists(model_path):
+                import tempfile
+                import shutil
+                import h5py
+                import json
+                
+                with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tf_file:
+                    tmp_path = tf_file.name
+                shutil.copy2(model_path, tmp_path)
+                
+                with h5py.File(tmp_path, 'r+') as f:
+                    model_config = f.attrs.get('model_config')
+                    if model_config is not None:
+                        if isinstance(model_config, bytes):
+                            model_config = model_config.decode('utf-8')
+                        config_dict = json.loads(model_config)
+                        for layer in config_dict.get('config', {}).get('layers', []):
+                            if layer['class_name'] == 'InputLayer':
+                                if 'batch_shape' in layer['config']:
+                                    layer['config']['batch_input_shape'] = layer['config'].pop('batch_shape')
+                                if 'optional' in layer['config']:
+                                    del layer['config']['optional']
+                            if 'quantization_config' in layer.get('config', {}):
+                                del layer['config']['quantization_config']
+                        f.attrs['model_config'] = json.dumps(config_dict).encode('utf-8')
+                
                 with tf.device('/CPU:0'):
-                    model_instance = load_model(model_path, compile=False)
+                    model_instance = load_model(tmp_path, compile=False)
             else:
                 raise HTTPException(status_code=500, detail=f"Model not found on disk at {model_path}")
                 
