@@ -21,7 +21,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "NovaTrade | AI Stock Prediction Terminal",
+  title: "AlphaTrade | AI Stock Prediction Terminal",
   description: "Time-Aware Hybrid RAG-LSTM Architecture for NSE stocks",
 };
 

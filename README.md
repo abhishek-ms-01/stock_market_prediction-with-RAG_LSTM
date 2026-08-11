@@ -1,15 +1,15 @@
 <div align="center">
-  <img src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=2070&auto=format&fit=crop" alt="NovaTrade Banner" width="100%" />
+  <img src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=2070&auto=format&fit=crop" alt="AlphaTrade Banner" width="100%" />
 
   <br />
   <br />
 
-  # 📈 NovaTrade: Predictive Intelligence v2.0
+  # 📈 AlphaTrade: Predictive Intelligence v2.0
   **EVENT-DRIVEN STOCK MARKET PREDICTION SYSTEM USING RAG-LSTM**
   
   <p align="center">
     <a href="#problem-statement">Problem</a> •
-    <a href="#why-novatrade">Why NovaTrade?</a> •
+    <a href="#why-AlphaTrade">Why AlphaTrade?</a> •
     <a href="#technologies">Tech Stack</a> •
     <a href="#system-architecture">Architecture</a> •
     <a href="#getting-started">Installation</a>
@@ -21,14 +21,14 @@
 ## 🛑 Problem Statement
 In today's highly volatile financial markets, retail investors are at a massive disadvantage. Institutional trading firms utilize complex, event-driven algorithms that can instantly digest global news and adjust quantitative models. Retail investors, on the other hand, are forced to rely on lagging technical indicators (like moving averages) that only tell you what *has* happened, not what *will* happen based on real-time semantic catalysts. 
 
-## ⚖️ Existing Solutions vs. NovaTrade
+## ⚖️ Existing Solutions vs. AlphaTrade
 **Existing Solutions:**
 * Rely purely on historical price data (ARIMA, basic LSTMs).
 * Ignore qualitative data like breaking news, earnings reports, and central bank announcements.
 * Offer cluttered, non-intuitive User Interfaces.
 
-**What's Different in NovaTrade:**
-NovaTrade bridges the gap by introducing a **Time-Aware Hybrid Architecture**. We don't just look at the price; we read the news. By combining **RAG (Retrieval-Augmented Generation)** with **LSTM Neural Networks**, the system contextualizes time-series price action with real-world semantic data, mimicking how a human analyst evaluates a stock.
+**What's Different in AlphaTrade:**
+AlphaTrade bridges the gap by introducing a **Time-Aware Hybrid Architecture**. We don't just look at the price; we read the news. By combining **RAG (Retrieval-Augmented Generation)** with **LSTM Neural Networks**, the system contextualizes time-series price action with real-world semantic data, mimicking how a human analyst evaluates a stock.
 
 ## 💎 Why it is Better
 1. **Institutional-Grade Interface:** A bespoke, dark-mode Next.js 14 dashboard engineered with true glassmorphism, cinematic ambient lighting, and lightweight-charts for ultra-smooth rendering.

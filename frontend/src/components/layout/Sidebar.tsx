@@ -87,7 +87,7 @@ export function Sidebar() {
         </div>
         {!collapsed && (
           <span className="ml-3 font-bold text-xl whitespace-nowrap text-foreground tracking-tight flex items-center">
-            Nova<span className="text-primary">Trade</span>
+            Alpha<span className="text-primary">Trade</span>
           </span>
         )}
       </Link>
