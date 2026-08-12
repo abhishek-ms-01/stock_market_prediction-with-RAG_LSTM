@@ -26,7 +26,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   
-  const { ticker, stockName, periodLabel, stocks, setTicker, setPeriod, setStocks } = useAppStore();
+  const { ticker, stockName, periodLabel, stocks, setTicker, setPeriod, setStocks, mobileMenuOpen, setMobileMenuOpen } = useAppStore();
   const [customSymbol, setCustomSymbol] = useState("");
 
   useEffect(() => {
@@ -76,11 +76,21 @@ export function Sidebar() {
   };
 
   return (
-    <div className={clsx(
-      "flex flex-col h-full bg-surface border-r border-border transition-all duration-300 relative",
-      collapsed ? "w-20" : "w-72"
-    )}>
-      {/* Logo */}
+    <>
+      {/* Mobile Overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+      
+      <div className={clsx(
+        "flex flex-col h-full bg-surface border-r border-border transition-all duration-300 fixed lg:relative z-50",
+        collapsed ? "w-20" : "w-72",
+        mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
+        {/* Logo */}
       <Link href="/" className="h-16 flex items-center px-6 border-b border-border mb-4 shrink-0 hover:bg-surface-raised/50 transition-colors group text-decoration-none">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(0,242,254,0.4)] group-hover:scale-105 transition-transform">
           <Activity className="w-5 h-5 text-white" />
@@ -135,13 +145,14 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Collapse toggle */}
+      {/* Collapse toggle (Desktop only) */}
       <button 
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-surface border border-border flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors z-10"
+        className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 rounded-full bg-surface border border-border items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors z-10"
       >
         <ChevronLeft className={clsx("w-4 h-4 transition-transform", collapsed && "rotate-180")} />
       </button>
     </div>
+    </>
   );
 }

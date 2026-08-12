@@ -2,7 +2,7 @@
 
 import { useAppStore } from "@/store/appStore";
 import { useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, Menu } from "lucide-react";
 
 const periodMap: Record<string, string> = {
   "6 Months": "6mo",
@@ -11,7 +11,7 @@ const periodMap: Record<string, string> = {
 };
 
 export function Header() {
-  const { ticker, stockName, periodLabel, stocks, setTicker, setPeriod } = useAppStore();
+  const { ticker, stockName, periodLabel, stocks, setTicker, setPeriod, mobileMenuOpen, setMobileMenuOpen } = useAppStore();
   
   const [customSymbol, setCustomSymbol] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -43,33 +43,41 @@ export function Header() {
   };
 
   return (
-    <header className="px-8 py-6 bg-surface/50 backdrop-blur-md border-b border-border sticky top-0 z-20 flex justify-between items-start gap-4 flex-wrap">
+    <header className="px-4 md:px-8 py-4 md:py-6 bg-surface/50 backdrop-blur-md border-b border-border sticky top-0 z-20 flex flex-col xl:flex-row justify-between items-start gap-4">
       {/* Title Section */}
-      <div className="flex flex-col gap-2 shrink-0">
-        <h1 className="text-3xl font-bold text-foreground">
-          {stockName || ticker} <span className="text-xl text-secondary font-medium">({ticker})</span>
-        </h1>
-        <p className="text-sm text-secondary bg-gradient-to-r from-primary to-amber-400 bg-clip-text text-transparent font-semibold">
-          AI Stock Market Prediction System · Time-Aware Hybrid RAG-LSTM Architecture
-        </p>
-        
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          {/* Emerald Pill */}
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-            ⚡ Model Online
-          </span>
+      <div className="flex items-start gap-4 w-full xl:w-auto">
+        <button 
+          onClick={() => setMobileMenuOpen(true)}
+          className="mt-1 lg:hidden p-2 -ml-2 rounded-lg text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        <div className="flex flex-col gap-2 shrink-0">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground leading-tight">
+            {stockName || ticker} <span className="text-lg md:text-xl text-secondary font-medium block sm:inline">({ticker})</span>
+          </h1>
+          <p className="text-xs md:text-sm text-secondary bg-gradient-to-r from-primary to-amber-400 bg-clip-text text-transparent font-semibold">
+            AI Stock Market Prediction System <span className="hidden sm:inline">· Time-Aware Hybrid RAG-LSTM Architecture</span>
+          </p>
           
-          {/* Amber Pill */}
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
-            🕒 {periodLabel}
-          </span>
+          <div className="flex flex-wrap items-center gap-2 mt-1 md:mt-2">
+            {/* Emerald Pill */}
+            <span className="inline-flex items-center px-2 py-1 md:px-3 rounded-full text-[10px] md:text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              ⚡ Model Online
+            </span>
+            
+            {/* Amber Pill */}
+            <span className="inline-flex items-center px-2 py-1 md:px-3 rounded-full text-[10px] md:text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              🕒 {periodLabel}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Control Panel Section */}
-      <div className="flex flex-wrap items-end gap-4 shrink-0 bg-surface-raised/80 backdrop-blur-sm border border-border p-3 rounded-xl shadow-lg mt-2 lg:mt-0">
+      <div className="flex flex-wrap md:flex-nowrap items-end gap-3 md:gap-4 w-full xl:w-auto bg-surface-raised/80 backdrop-blur-sm border border-border p-3 md:p-3 rounded-xl shadow-lg">
         {/* Select Stock */}
-        <div className="relative w-48">
+        <div className="relative w-full md:w-48">
           <label className="text-secondary font-medium text-[10px] uppercase tracking-wide mb-1 block">📌 Select Stock</label>
           <button 
             onClick={() => setSearchOpen(!searchOpen)}
@@ -115,7 +123,7 @@ export function Header() {
         </div>
 
         {/* Custom Symbol */}
-        <div className="w-32">
+        <div className="w-1/2 md:w-32 shrink-0">
           <label className="text-secondary font-medium text-[10px] uppercase tracking-wide mb-1 block">✏️ Custom</label>
           <input 
             type="text"
@@ -127,7 +135,7 @@ export function Header() {
         </div>
 
         {/* Timeframe */}
-        <div className="w-32">
+        <div className="w-1/2 md:w-32 shrink-0">
           <label className="text-secondary font-medium text-[10px] uppercase tracking-wide mb-1 block">📅 Timeframe</label>
           <div className="relative">
             <select 
