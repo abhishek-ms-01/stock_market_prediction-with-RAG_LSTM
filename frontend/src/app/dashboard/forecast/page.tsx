@@ -15,7 +15,7 @@ const horizonOptions = [
 
 export default function ForecastPage() {
   const { ticker } = useAppStore();
-  const [horizon, setHorizon] = useState("5m");
+  const [horizon, setHorizon] = useState("1d");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +94,12 @@ export default function ForecastPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
+            {result.notice && (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl flex items-center gap-3 text-sm font-medium">
+                <Info className="w-5 h-5 text-amber-400 shrink-0" />
+                <span>{result.notice}</span>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Direction Card */}
               <div className={`p-6 rounded-2xl border ${
@@ -118,8 +124,9 @@ export default function ForecastPage() {
                     </>
                   ) : (
                     <div className="text-secondary text-sm">
-                      {result.direction === "UP" ? "Bullish momentum expected" : "Bearish movement expected"} for tomorrow's session
+                      {result.direction === "UP" ? "Bullish momentum expected" : "Bearish movement expected"} for <b className="text-foreground">{result.forecast_target || "next trading session"}</b>
                     </div>
+
                   )}
                 </div>
               </div>

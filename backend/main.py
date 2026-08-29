@@ -14,8 +14,13 @@ from risk.risk_analyzer import calculate_stock_risk_metrics
 from market_regime.regime_detector import MarketRegimeDetector
 from portfolio.portfolio_advisor import PortfolioRecommendationEngine
 from chatbot.chatbot import StockAssistantChatbot
+from data_ingestion.live_news_fetcher import LiveNewsFetcher
+from prediction.online_trainer import DynamicLSTMOnlineTrainer
 
 app = FastAPI(title="AI Stock Market Prediction API")
+live_fetcher = LiveNewsFetcher()
+online_trainer = DynamicLSTMOnlineTrainer()
+chatbot_instance = StockAssistantChatbot()
 
 app.add_middleware(
     CORSMiddleware,
@@ -169,11 +174,15 @@ class ChatRequest(BaseModel):
 
 chatbot_instance = None
 
-@app.post("/api/chat")
-def chat(req: ChatRequest, ticker: str = "RELIANCE.NS"):
+def get_chatbot_instance():
     global chatbot_instance
     if chatbot_instance is None:
         chatbot_instance = StockAssistantChatbot()
+    return chatbot_instance
+
+@app.post("/api/chat")
+def chat(req: ChatRequest, ticker: str = "RELIANCE.NS"):
+    bot = get_chatbot_instance()
         
     try:
         df = process_stock_data(ticker, "6mo")
@@ -200,11 +209,71 @@ def chat(req: ChatRequest, ticker: str = "RELIANCE.NS"):
 import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import load_model
+from datetime import timezone, timedelta, time
+import pytz
 
 model_instance = None
 
+def check_market_session_status(ticker: str, df: pd.DataFrame = None):
+    """
+    Evaluates real-time market status (OPEN or CLOSED) for Indian (NSE/BSE) or US markets.
+    Computes explicit forecast target metadata indicating whether the prediction is for
+    the current open session or for Tomorrow's / Next Trading Day's Opening Session.
+    """
+    now_utc = datetime.now(timezone.utc)
+    
+    # Check Ticker Exchange & Timezone
+    if ticker.endswith(".NS") or ticker.endswith(".BO"):
+        # Indian Stock Market (NSE/BSE) - 09:15 to 15:30 IST
+        tz = pytz.timezone("Asia/Kolkata")
+        open_time = time(9, 15)
+        close_time = time(15, 30)
+    else:
+        # US Stock Market (NYSE/NASDAQ) - 09:30 to 16:00 EST
+        tz = pytz.timezone("America/New_York")
+        open_time = time(9, 30)
+        close_time = time(16, 0)
+        
+    now_local = now_utc.astimezone(tz)
+    weekday = now_local.weekday()  # 0=Mon, 4=Fri, 5=Sat, 6=Sun
+    
+    is_weekend = weekday >= 5
+    is_trading_hours = open_time <= now_local.time() <= close_time
+    is_open = (not is_weekend) and is_trading_hours
+    
+    # If market is closed, calculate next trading session date (Tomorrow or Next Monday)
+    if is_open:
+        forecast_target_desc = "Current Open Trading Session"
+        next_session_dt = now_local
+        status_msg = "Market is currently OPEN. Forecast reflects active trading session momentum."
+    else:
+        # Move to tomorrow or next business day
+        next_session_dt = now_local + timedelta(days=1)
+        while next_session_dt.weekday() >= 5:  # Skip Sat & Sun
+            next_session_dt += timedelta(days=1)
+            
+        target_date_str = next_session_dt.strftime("%Y-%m-%d")
+        if is_weekend:
+            forecast_target_desc = f"Next Trading Day (Monday, {target_date_str})"
+        elif now_local.time() > close_time:
+            forecast_target_desc = f"Tomorrow's Trading Day ({target_date_str})"
+        else:
+            forecast_target_desc = f"Next Session Opening ({target_date_str})"
+            
+        status_msg = f"Market is currently CLOSED. Prediction is strictly applicable to the {forecast_target_desc} session."
+        
+    return {
+        "is_market_open": is_open,
+        "market_status": "OPEN" if is_open else "CLOSED",
+        "market_status_message": status_msg,
+        "forecast_target": forecast_target_desc,
+        "next_session_date": next_session_dt.strftime("%Y-%m-%d"),
+        "current_local_time": now_local.strftime("%Y-%m-%d %H:%M:%S %Z")
+    }
+
 @app.get("/api/forecast")
-def get_forecast(ticker: str, horizon: str):
+@app.get("/api/predict")
+def get_forecast(ticker: str = "RELIANCE.NS", horizon: str = "1d", force_retrain: bool = False):
     try:
         global model_instance
         if model_instance is None:
@@ -299,6 +368,49 @@ def get_forecast(ticker: str, horizon: str):
             if len(df_intra) < 5:
                 raise HTTPException(status_code=400, detail="Insufficient data for 5-step lookback.")
                 
+            session_info = check_market_session_status(ticker, df_intra)
+            if not session_info["is_market_open"]:
+                # Market is CLOSED - Gracefully compute Tomorrow's workable daily forecast
+                trained_model, scaler_obj, meta_info = online_trainer.train_up_to_date_model(ticker, period="6mo", force_retrain=force_retrain)
+                df_daily = process_stock_data(ticker, "6mo")
+                
+                model_feat = meta_info.get('features', ['RSI', 'MACD', 'Return', 'MA_20_ratio', 'Close_Open', 'High_Low', 'Volume_ratio', 'Volatility'])
+                available_feat = [f for f in model_feat if f in df_daily.columns]
+                Xs = scaler_obj.transform(df_daily[available_feat])
+                seq = np.expand_dims(Xs[-5:], axis=0).astype(np.float32)
+                
+                with tf.device('/CPU:0'):
+                    score = float(trained_model(seq, training=False).numpy()[0][0])
+                    
+                direction = "UP" if score > 0.5 else "DOWN"
+                fdf = pd.DataFrame(df_daily[available_feat].tail(5))
+                fdf.index = [f"Day -{4-i}" for i in range(5)]
+                
+                current_price = float(df_daily['Close'].iloc[-1])
+                vol_avg = df_daily['Volatility'].mean() if 'Volatility' in df_daily.columns else 0.01
+                if np.isnan(vol_avg): vol_avg = 0.01
+                move_pct = (score - 0.5) * 2.0 * vol_avg
+                target_price = current_price * (1.0 + move_pct)
+                
+                return {
+                    "score": score,
+                    "direction": direction,
+                    "current_price": current_price,
+                    "target_price": target_price,
+                    "move_pct": move_pct,
+                    "target_time": f"Opening ({session_info['next_session_date']})",
+                    "horizon_mins": horizon_mins,
+                    "market_status": "CLOSED",
+                    "is_market_open": False,
+                    "market_status_message": f"Market is currently CLOSED. Intraday {horizon} request automatically adapted to {session_info['forecast_target']}.",
+                    "forecast_target": session_info["forecast_target"],
+                    "next_session_date": session_info["next_session_date"],
+                    "notice": f"Market is CLOSED. Showing workable prediction for {session_info['forecast_target']}.",
+
+                    "features": fdf.to_dict(orient="index"),
+                    "model_meta": meta_info
+                }
+                
             date_col = 'Datetime' if 'Datetime' in df_intra.columns else ('Date' if 'Date' in df_intra.columns else df_intra.columns[0])
             last_time = pd.to_datetime(df_intra[date_col].iloc[-1])
             target_time = last_time + pd.Timedelta(minutes=horizon_mins)
@@ -328,35 +440,91 @@ def get_forecast(ticker: str, horizon: str):
                 "move_pct": move_pct,
                 "target_time": target_time.strftime("%H:%M:%S"),
                 "horizon_mins": horizon_mins,
+                "market_status": session_info["market_status"],
+                "is_market_open": session_info["is_market_open"],
+                "market_status_message": session_info["market_status_message"],
+                "forecast_target": session_info["forecast_target"],
+                "next_session_date": session_info["next_session_date"],
                 "features": fdf.to_dict(orient="index")
             }
 
         # --- DAILY ---
         else:
+            # Dynamically train/fine-tune model on up-to-date market & live news data
+            trained_model, scaler_obj, meta_info = online_trainer.train_up_to_date_model(ticker, period="6mo", force_retrain=force_retrain)
+            
             df = process_stock_data(ticker, "6mo")
             if len(df) < 5:
                 raise HTTPException(status_code=400, detail="Insufficient data for 5-day lookback.")
                 
-            scaler = MinMaxScaler()
-            Xs = scaler.fit_transform(df[features])
+            session_info = check_market_session_status(ticker, df)
+            model_feat = meta_info.get('features', ['RSI', 'MACD', 'Return', 'MA_20_ratio', 'Close_Open', 'High_Low', 'Volume_ratio', 'Volatility'])
+            available_feat = [f for f in model_feat if f in df.columns]
+            Xs = scaler_obj.transform(df[available_feat])
             seq = np.expand_dims(Xs[-5:], axis=0).astype(np.float32)
             
             with tf.device('/CPU:0'):
-                score = float(model_instance(seq, training=False).numpy()[0][0])
+                score = float(trained_model(seq, training=False).numpy()[0][0])
                 
             direction = "UP" if score > 0.5 else "DOWN"
             
-            fdf = pd.DataFrame(df[features].tail(5))
+            fdf = pd.DataFrame(df[available_feat].tail(5))
             fdf.index = [f"Day -{4-i}" for i in range(5)]
             
             return {
                 "score": score,
                 "direction": direction,
-                "features": fdf.to_dict(orient="index")
+                "forecast_target": session_info["forecast_target"],
+                "next_session_date": session_info["next_session_date"],
+                "market_status": session_info["market_status"],
+                "is_market_open": session_info["is_market_open"],
+                "market_status_message": session_info["market_status_message"],
+                "features": fdf.to_dict(orient="index"),
+                "model_meta": meta_info
             }
     except Exception as e:
         import traceback
         raise HTTPException(status_code=500, detail=str(traceback.format_exc()))
+
+@app.post("/api/train-model")
+def train_model(ticker: str = "RELIANCE.NS", force_retrain: bool = True):
+    """Triggers real-time online model training on up-to-date market & live news data for a ticker."""
+    try:
+        model, scaler, meta = online_trainer.train_up_to_date_model(ticker, period="6mo", force_retrain=force_retrain)
+        return {
+            "status": "success",
+            "message": f"Successfully trained up-to-date LSTM model for {ticker}",
+            "training_meta": meta
+        }
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=str(traceback.format_exc()))
+
+@app.get("/api/live-news")
+def get_live_news(ticker: str = "RELIANCE.NS"):
+    """Fetches real-time breaking live news for a given stock ticker with credibility & recency decay weighted sentiment."""
+    ticker_name = [k for k, v in stocks.items() if v == ticker]
+    tname = ticker_name[0] if ticker_name else ticker
+    
+    df_live = live_fetcher.get_live_news_for_ticker(tname, ticker)
+    if not df_live.empty:
+        # Dynamically index live news into RAG
+        bot = get_chatbot_instance()
+        if bot and hasattr(bot, 'rag_engine') and bot.rag_engine:
+            bot.rag_engine.add_live_news_articles(df_live)
+        
+        from data_ingestion.live_news_fetcher import compute_weighted_composite_sentiment
+        weighted_sentiment = compute_weighted_composite_sentiment(df_live)
+        raw_sentiment = round(float(df_live['sentiment'].mean()), 3) if 'sentiment' in df_live.columns else 0.0
+        
+        return {
+            "status": "success",
+            "count": len(df_live),
+            "weighted_composite_sentiment": weighted_sentiment,
+            "raw_mean_sentiment": raw_sentiment,
+            "news": df_live[['title', 'source', 'url', 'sentiment', 'credibility', 'event', 'date']].to_dict(orient="records")
+        }
+    return {"status": "empty", "count": 0, "weighted_composite_sentiment": 0.0, "news": []}
 
 @app.get("/api/indicators")
 def get_indicators(ticker: str, period: str = "6mo"):
@@ -364,15 +532,24 @@ def get_indicators(ticker: str, period: str = "6mo"):
     df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
     last_10 = df.tail(10)[['Date', 'Close', 'MA_20', 'RSI', 'MACD', 'Return', 'Volatility']].to_dict(orient="records")
     
-    # Read news sentiment rows exactly as Indicators tab shows
-    news_df = pd.DataFrame()
-    news_path = os.path.join(os.path.dirname(__file__), "data", "news_processed.csv")
-    if os.path.exists(news_path):
-        news_df = pd.read_csv(news_path)
+    # Live Real-Time News Data Fetching
+    ticker_name = [k for k, v in stocks.items() if v == ticker]
+    tname = ticker_name[0] if ticker_name else ticker
+    df_live = live_fetcher.get_live_news_for_ticker(tname, ticker)
     
     news_sentiment = []
-    if not news_df.empty:
-        news_sentiment = news_df.head(10)[['title', 'sentiment', 'event']].to_dict(orient="records")
+    if not df_live.empty:
+        bot = get_chatbot_instance()
+        if bot and hasattr(bot, 'rag_engine') and bot.rag_engine:
+            bot.rag_engine.add_live_news_articles(df_live)
+        news_sentiment = df_live.head(10)[['title', 'sentiment', 'event']].to_dict(orient="records")
+    else:
+        # Fallback to stored CSV if offline
+        news_path = os.path.join(os.path.dirname(__file__), "data", "news_processed.csv")
+        if os.path.exists(news_path):
+            news_df = pd.read_csv(news_path)
+            if not news_df.empty:
+                news_sentiment = news_df.head(10)[['title', 'sentiment', 'event']].to_dict(orient="records")
         
     return {
         "indicators": last_10,

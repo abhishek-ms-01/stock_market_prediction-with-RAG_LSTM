@@ -88,11 +88,45 @@ class FinancialRAGEngine:
                         self.faiss_index.add(self.embeddings)
                         print(f"[RAG Engine] Loaded FAISS index with {len(text_corpus)} docs (dim={dim}).")
                 except Exception as e:
-                    print(f"[RAG Engine Warning] FAISS init fallback to TF-IDF: {e}")
-                    self.faiss_index = None
+                    print(f"[RAG Engine Warning] FAISS init error: {e}")
 
         except Exception as e:
-            print(f"[RAG Engine Error] Failed to build vector index: {e}")
+            print(f"[RAG Engine Error] Failed to build index: {e}")
+
+    def add_live_news_articles(self, live_df: pd.DataFrame):
+        """Dynamically merges fresh live news articles and rebuilds the vector index."""
+        if live_df is None or live_df.empty:
+            return
+
+        live_df = live_df.copy()
+        if 'date' in live_df.columns:
+            live_df['parsed_date'] = pd.to_datetime(live_df['date'], errors='coerce', utc=True)
+        else:
+            live_df['parsed_date'] = pd.NaT
+
+        if self.df is None or self.df.empty:
+            self.df = live_df
+        else:
+            combined = pd.concat([live_df, self.df], ignore_index=True)
+            # Deduplicate by title
+            combined['clean_title'] = combined['title'].astype(str).str.lower().str.replace(r'\W+', '', regex=True)
+            combined = combined.drop_duplicates(subset=['clean_title']).drop(columns=['clean_title'])
+            self.df = combined
+
+        text_corpus = []
+        for _, row in self.df.iterrows():
+            title = str(row.get("title", ""))
+            content = str(row.get("content", ""))
+            event = str(row.get("event", ""))
+            text_corpus.append(f"{title} {content} {event}".strip())
+
+        try:
+            self.tfidf_vectorizer = TfidfVectorizer(ngram_range=(1, 2), stop_words="english", max_features=5000)
+            self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(text_corpus)
+            self.is_indexed = True
+            print(f"[RAG Engine Live Update] Successfully indexed {len(live_df)} live news items (Total RAG corpus: {len(self.df)}).")
+        except Exception as e:
+            print(f"[RAG Engine Warning] Live TF-IDF indexing error: {e}")
 
     def retrieve_time_aware(self, query: str, target_date=None, top_k: int = 3, ticker_filter: str = None) -> list:
         """

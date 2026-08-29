@@ -3,7 +3,7 @@ numpy
 yfinance
 newsapi-python
 nltk
-tensorflow-cpu
+tensorflow
 scikit-learn
 fastapi
 uvicorn
