@@ -33,6 +33,7 @@ SOURCE_CREDIBILITY_SCORES = {
     "Mint": 0.86,
     "NewsAPI": 0.80,
     "Google News": 0.80,
+    "Finnhub": 0.92,
     "General": 0.50
 }
 
@@ -62,6 +63,37 @@ except Exception:
     nltk.download('vader_lexicon', quiet=True)
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     vader = SentimentIntensityAnalyzer()
+
+def compute_weighted_composite_sentiment(articles_df: pd.DataFrame) -> float:
+    """
+    Computes a single weighted composite sentiment score in [-1.0, +1.0].
+    """
+    if articles_df is None or articles_df.empty or 'content' not in articles_df.columns:
+        return 0.0
+        
+    scores = []
+    weights = []
+    
+    for idx, row in articles_df.iterrows():
+        text = str(row.get('content', ''))
+        source = str(row.get('source', 'General'))
+        
+        if not text.strip():
+            continue
+            
+        vs = vader.polarity_scores(text)
+        comp_score = vs['compound']
+        
+        cred_weight = get_source_credibility(source)
+        
+        scores.append(comp_score)
+        weights.append(cred_weight)
+        
+    if not scores or sum(weights) == 0:
+        return 0.0
+        
+    weighted_sentiment = sum(w * s for w, s in zip(weights, scores)) / total_weight if (total_weight := sum(weights)) > 0 else 0.0
+    return round(float(weighted_sentiment), 3)
 
 FINANCIAL_KEYWORD_ADJUSTMENTS = {
     "beat estimates": 0.35,
@@ -144,6 +176,73 @@ class LiveNewsFetcher:
     def __init__(self):
         self.newsapi_key = os.getenv("NEWS_API_KEY", "")
         self.alphavantage_key = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+        self.finnhub_key = os.getenv("FINNHUB_API_KEY", "dac2t21r01qk72tssfpgdac2t21r01qk72tssfq0")
+
+    def fetch_finnhub_quote(self, symbol: str) -> dict:
+        """Fetches real-time zero-delay stock market price quote from Finnhub."""
+        api_key = self.finnhub_key or os.getenv("FINNHUB_API_KEY", "")
+        if not api_key or not symbol:
+            return {}
+        clean_sym = symbol.replace(".NS", "").replace(".BO", "")
+        try:
+            url = f"https://finnhub.io/api/v1/quote?symbol={clean_sym}&token={api_key}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=4, context=ctx) as response:
+                data = json.loads(response.read().decode('utf-8'))
+            if data and "c" in data and data["c"] != 0:
+                return {
+                    "current_price": float(data.get("c", 0)),
+                    "change": float(data.get("d", 0)),
+                    "percent_change": float(data.get("dp", 0)),
+                    "high": float(data.get("h", 0)),
+                    "low": float(data.get("l", 0)),
+                    "open": float(data.get("o", 0)),
+                    "previous_close": float(data.get("pc", 0)),
+                    "timestamp": data.get("t", 0)
+                }
+        except Exception as e:
+            print(f"[LiveNewsFetcher Warning] Finnhub quote fetch failed: {e}")
+        return {}
+
+    def fetch_finnhub_news(self, ticker_symbol: str) -> list:
+        """Fetches real-time company news from Finnhub."""
+        articles = []
+        api_key = self.finnhub_key or os.getenv("FINNHUB_API_KEY", "")
+        if not api_key:
+            return articles
+        clean_sym = ticker_symbol.replace(".NS", "").replace(".BO", "")
+        try:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            from_date = (datetime.now(timezone.utc) - pd.Timedelta(days=14)).strftime("%Y-%m-%d")
+            url = f"https://finnhub.io/api/v1/company-news?symbol={clean_sym}&from={from_date}&to={today}&token={api_key}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
+                data = json.loads(response.read().decode('utf-8'))
+            if isinstance(data, list):
+                for item in data[:10]:
+                    title = item.get("headline", "")
+                    summary = item.get("summary", "") or title
+                    ts = item.get("datetime", None)
+                    dt_str = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else datetime.now(timezone.utc).isoformat()
+                    source = item.get("source", "Finnhub")
+                    url_link = item.get("url", "")
+                    if title:
+                        articles.append({
+                            "title": title,
+                            "content": summary,
+                            "date": dt_str,
+                            "source": f"{source} (Finnhub)",
+                            "url": url_link
+                        })
+        except Exception as e:
+            print(f"[LiveNewsFetcher Warning] Finnhub news fetch failed: {e}")
+        return articles
 
     def fetch_alphavantage_news(self, ticker_name: str) -> list:
         """Fetches real-time financial market news & institutional sentiment from Alpha Vantage."""
@@ -354,32 +453,38 @@ class LiveNewsFetcher:
 
     def get_live_news_for_ticker(self, ticker_name: str, symbol: str = "") -> pd.DataFrame:
         """
-        Main entrypoint: Fetches live news across FOUR major sources:
-        1. Alpha Vantage Real-Time News & Sentiment API
-        2. Google News RSS Feed
-        3. yfinance Stream
-        4. NewsAPI Feed
+        Main entrypoint: Fetches live news across FIVE major sources:
+        1. Finnhub Real-Time Company News API (Zero delay)
+        2. Alpha Vantage Real-Time News & Sentiment API
+        3. Google News RSS Feed
+        4. yfinance Stream
+        5. NewsAPI Feed
         Processes scores, deduplicates, and returns structured DataFrame.
         """
         raw_list = []
         symbol_val = symbol if isinstance(symbol, str) and symbol else ticker_name
         clean_name = ticker_name.replace(".NS", "").replace(".BO", "")
         
-        # 1. Fetch Alpha Vantage Real-Time Market Sentiment News
+        # 1. Fetch Finnhub Real-Time News
+        if symbol_val:
+            fh_news = self.fetch_finnhub_news(symbol_val)
+            raw_list.extend(fh_news)
+
+        # 2. Fetch Alpha Vantage Real-Time Market Sentiment News
         av_news = self.fetch_alphavantage_news(clean_name)
         raw_list.extend(av_news)
         
-        # 2. Fetch yfinance news
+        # 3. Fetch yfinance news
         if symbol_val:
             yf_news = self.fetch_yfinance_news(symbol_val)
             raw_list.extend(yf_news)
             
-        # 3. Fetch Google News RSS feed
+        # 4. Fetch Google News RSS feed
         search_query = f"{clean_name} stock share price news"
         gn_news = self.fetch_google_news_rss(search_query)
         raw_list.extend(gn_news)
         
-        # 4. Fetch NewsAPI feed
+        # 5. Fetch NewsAPI feed
         newsapi_query = f"{clean_name} stock OR shares OR market"
         napi_news = self.fetch_newsapi(newsapi_query)
         raw_list.extend(napi_news)

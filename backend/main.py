@@ -15,10 +15,12 @@ from market_regime.regime_detector import MarketRegimeDetector
 from portfolio.portfolio_advisor import PortfolioRecommendationEngine
 from chatbot.chatbot import StockAssistantChatbot
 from data_ingestion.live_news_fetcher import LiveNewsFetcher
+from data_ingestion.upstox_fetcher import UpstoxDataFetcher
 from prediction.online_trainer import DynamicLSTMOnlineTrainer
 
 app = FastAPI(title="AI Stock Market Prediction API")
 live_fetcher = LiveNewsFetcher()
+upstox_fetcher = UpstoxDataFetcher()
 online_trainer = DynamicLSTMOnlineTrainer()
 chatbot_instance = StockAssistantChatbot()
 
@@ -168,6 +170,24 @@ def get_stock_data(ticker: str = "RELIANCE.NS", period: str = "6mo"):
     # Convert dates to string for JSON serialization
     df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
     return df.to_dict(orient="records")
+
+@app.get("/api/quote/realtime")
+def get_realtime_quote(symbol: str = "RELIANCE.NS"):
+    """
+    Fetches 0-delay real-time price quotes.
+    Uses Upstox API v2 for Indian NSE/BSE equities, and Finnhub API for US/Global equities.
+    """
+    # 1. Try Upstox API v2 for Indian / NSE stocks
+    quote = upstox_fetcher.fetch_upstox_quote(symbol)
+    if quote:
+        return quote
+
+    # 2. Fallback to Finnhub for US/Global symbols
+    quote = live_fetcher.fetch_finnhub_quote(symbol)
+    if quote:
+        return quote
+
+    raise HTTPException(status_code=404, detail=f"Real-time quote unavailable for symbol {symbol}")
 
 class ChatRequest(BaseModel):
     query: str
