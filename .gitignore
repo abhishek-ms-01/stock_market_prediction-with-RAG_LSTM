@@ -3,11 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Environments
+# Environments & Secrets
 venv/
 env/
 ENV/
 .venv/
+.env
+*.env
+backend/.env
 
 # macOS
 .DS_Store

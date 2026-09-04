@@ -56,13 +56,21 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
+vader = None
 try:
-    from nltk.sentiment.vader import SentimentIntensityAnalyzer
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
     vader = SentimentIntensityAnalyzer()
-except Exception:
-    nltk.download('vader_lexicon', quiet=True)
-    from nltk.sentiment.vader import SentimentIntensityAnalyzer
-    vader = SentimentIntensityAnalyzer()
+except ImportError:
+    try:
+        from nltk.sentiment.vader import SentimentIntensityAnalyzer
+        vader = SentimentIntensityAnalyzer()
+    except Exception:
+        try:
+            nltk.download('vader_lexicon', quiet=True)
+            from nltk.sentiment.vader import SentimentIntensityAnalyzer
+            vader = SentimentIntensityAnalyzer()
+        except Exception:
+            vader = None
 
 def compute_weighted_composite_sentiment(articles_df: pd.DataFrame) -> float:
     """
@@ -81,8 +89,11 @@ def compute_weighted_composite_sentiment(articles_df: pd.DataFrame) -> float:
         if not text.strip():
             continue
             
-        vs = vader.polarity_scores(text)
-        comp_score = vs['compound']
+        if vader is not None:
+            vs = vader.polarity_scores(text)
+            comp_score = vs['compound']
+        else:
+            comp_score = 0.0
         
         cred_weight = get_source_credibility(source)
         
@@ -426,8 +437,11 @@ class LiveNewsFetcher:
             text_to_score = f"{title}. {content}"
             
             # VADER Base Scoring + Financial Lexicon Adjustment
-            vader_res = vader.polarity_scores(text_to_score)
-            base_score = float(vader_res['compound'])
+            if vader is not None:
+                vader_res = vader.polarity_scores(text_to_score)
+                base_score = float(vader_res['compound'])
+            else:
+                base_score = 0.0
             sentiment_score = apply_financial_lexicon_adjustment(text_to_score, base_score)
             
             # Event Classification
