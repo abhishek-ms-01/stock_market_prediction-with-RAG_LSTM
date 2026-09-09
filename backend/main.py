@@ -220,7 +220,11 @@ def chat(req: ChatRequest, ticker: str = "RELIANCE.NS"):
     try:
         response = chatbot_instance.get_response(req.query, stock_ctx)
         doc_count = chatbot_instance.rag_engine.get_doc_count() if hasattr(chatbot_instance.rag_engine, 'get_doc_count') else 0
-        return {"response": response, "doc_count": doc_count}
+        return {
+            "response": response,
+            "reply": response,
+            "doc_count": doc_count
+        }
     except Exception as e:
         import traceback
         raise HTTPException(status_code=500, detail=str(traceback.format_exc()))

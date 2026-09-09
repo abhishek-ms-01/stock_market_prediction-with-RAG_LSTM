@@ -52,7 +52,7 @@ class FinancialRAGEngine:
             return
 
         try:
-            self.df = pd.read_csv(self.data_path).fillna("")
+            self.df = pd.read_csv(self.data_path).fillna("").reset_index(drop=True)
             if self.df.empty:
                 print("[RAG Engine Warning] Loaded news dataset is empty.")
                 return
@@ -93,6 +93,10 @@ class FinancialRAGEngine:
         except Exception as e:
             print(f"[RAG Engine Error] Failed to build index: {e}")
 
+    def get_doc_count(self) -> int:
+        """Returns total count of indexed news documents."""
+        return len(self.df) if self.df is not None else 0
+
     def add_live_news_articles(self, live_df: pd.DataFrame):
         """Dynamically merges fresh live news articles and rebuilds the vector index."""
         if live_df is None or live_df.empty:
@@ -105,13 +109,13 @@ class FinancialRAGEngine:
             live_df['parsed_date'] = pd.NaT
 
         if self.df is None or self.df.empty:
-            self.df = live_df
+            self.df = live_df.reset_index(drop=True)
         else:
             combined = pd.concat([live_df, self.df], ignore_index=True)
             # Deduplicate by title
             combined['clean_title'] = combined['title'].astype(str).str.lower().str.replace(r'\W+', '', regex=True)
             combined = combined.drop_duplicates(subset=['clean_title']).drop(columns=['clean_title'])
-            self.df = combined
+            self.df = combined.reset_index(drop=True)
 
         text_corpus = []
         for _, row in self.df.iterrows():
@@ -189,7 +193,7 @@ class FinancialRAGEngine:
         sim_scores = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
 
         # Restrict to valid time-aware indices
-        sub_scores = [(sim_scores[idx], idx) for idx in valid_indices]
+        sub_scores = [(sim_scores[idx], idx) for idx in valid_indices if 0 <= idx < len(sim_scores)]
         sub_scores.sort(key=lambda x: x[0], reverse=True)
 
         results = []

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppStore } from "@/store/appStore";
-import { BrainCircuit, LineChart, Target, Zap, TrendingUp, TrendingDown, Info } from "lucide-react";
+import { BrainCircuit, Target, Zap, TrendingUp, TrendingDown, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const horizonOptions = [
@@ -186,46 +186,6 @@ export default function ForecastPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <hr className="border-border my-8" />
-      
-      {/* Model Stats */}
-      <div>
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <LineChart className="w-5 h-5 text-primary" /> Model Performance
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-surface p-4 rounded-xl border border-border">
-            <div className="text-xs text-secondary uppercase tracking-wider mb-1">Test Accuracy</div>
-            <div className="text-2xl font-bold font-mono">85.71%</div>
-            <div className="text-xs text-muted mt-1">20% Held-Out Set</div>
-          </div>
-          <div className="bg-surface p-4 rounded-xl border border-border">
-            <div className="text-xs text-secondary uppercase tracking-wider mb-1">Training Epochs</div>
-            <div className="text-2xl font-bold font-mono">40</div>
-            <div className="text-xs text-muted mt-1">Adam lr=0.005</div>
-          </div>
-          <div className="bg-surface p-4 rounded-xl border border-border">
-            <div className="text-xs text-secondary uppercase tracking-wider mb-1">Features</div>
-            <div className="text-2xl font-bold font-mono">16</div>
-            <div className="text-xs text-muted mt-1">RAG + Technical Hybrid</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Verification */}
-      <details className="group glass-card p-4 rounded-xl [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex items-center cursor-pointer list-none gap-2 font-semibold text-secondary group-open:text-foreground transition-colors">
-          <Info className="w-4 h-4" /> ❓ How to Verify Predictions
-        </summary>
-        <div className="mt-4 pt-4 border-t border-border text-sm text-secondary space-y-2">
-          <p><strong className="text-foreground">UP (Score &gt; 0.50)</strong> — ✅ Correct if actual close &gt; start price</p>
-          <p><strong className="text-foreground">DOWN (Score ≤ 0.50)</strong> — ✅ Correct if actual close &lt; start price</p>
-          <div className="bg-surface-raised p-3 rounded-lg font-mono text-xs text-primary mt-2">
-            ./venv/bin/python prediction/train_lstm.py
-          </div>
-        </div>
-      </details>
     </div>
   );
 }

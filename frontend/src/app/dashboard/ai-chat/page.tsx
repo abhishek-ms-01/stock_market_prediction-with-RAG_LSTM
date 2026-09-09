@@ -56,7 +56,7 @@ export default function AIChatPage() {
       const data = await res.json();
       setMessages(prev => [...prev, {
         role: "assistant", 
-        content: data.reply
+        content: data.response || data.reply || "No response received"
       }]);
     } catch (err: any) {
       setMessages(prev => [...prev, {
@@ -88,7 +88,7 @@ export default function AIChatPage() {
                 {msg.role === 'user' ? <User className="w-4 h-4 text-secondary" /> : <Bot className="w-5 h-5" />}
               </div>
               
-              <div className={`p-4 rounded-2xl text-sm leading-relaxed ${
+              <div className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user' 
                   ? 'bg-primary text-background rounded-tr-sm' 
                   : 'bg-surface-raised border border-border text-foreground rounded-tl-sm shadow-md'
