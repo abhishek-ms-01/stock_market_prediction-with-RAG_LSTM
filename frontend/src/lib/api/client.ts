@@ -7,7 +7,8 @@ import {
   PortfolioResponse,
 } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const RAW_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/api\/?$/, '').replace(/\/$/, '');
+const API_BASE_URL = `${RAW_URL}/api`;
 
 /**
  * Generic fetch wrapper with error handling

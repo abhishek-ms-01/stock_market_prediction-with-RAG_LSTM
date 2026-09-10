@@ -3,7 +3,9 @@ numpy
 yfinance
 newsapi-python
 nltk
-tensorflow
+vaderSentiment
+tensorflow-cpu; sys_platform == 'linux'
+tensorflow; sys_platform != 'linux'
 scikit-learn
 fastapi
 uvicorn

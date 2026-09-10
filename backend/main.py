@@ -32,6 +32,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def read_root():
+    return {
+        "status": "healthy",
+        "service": "AI Stock Market Prediction API",
+        "docs": "/docs",
+        "version": "1.0.0"
+    }
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
 # ---------------------------------------------------
 # EXACT STOCKS DICT FROM APP.PY
 # ---------------------------------------------------
@@ -668,4 +681,11 @@ def get_benchmark_results():
         }
     ]
     return {"status": "success", "results": default_results}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    host = os.environ.get("HOST", "0.0.0.0")
+    uvicorn.run("main:app", host=host, port=port, reload=False)
 
