@@ -25,3 +25,7 @@ services:
         sync: false
       - key: UPSTOX_ACCESS_TOKEN
         sync: false
+      - key: ZERODHA_API_KEY
+        sync: false
+      - key: ZERODHA_API_SECRET
+        sync: false
