@@ -10,7 +10,9 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronDown,
-  Search
+  Search,
+  BarChart3,
+  Zap
 } from "lucide-react";
 import clsx from "clsx";
 import { useState, useEffect } from "react";
@@ -42,6 +44,8 @@ export function Sidebar() {
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "Forecast", href: "/dashboard/forecast", icon: LineChart },
     { name: "Indicators", href: "/dashboard/indicators", icon: Activity },
+    { name: "Live Pipeline", href: "/dashboard/live-pipeline", icon: Zap },
+    { name: "Experiments", href: "/dashboard/benchmark", icon: BarChart3 },
     { name: "Risk", href: "/dashboard/risk", icon: ShieldAlert },
     { name: "AI Chat", href: "/dashboard/ai-chat", icon: MessageSquare },
   ];
