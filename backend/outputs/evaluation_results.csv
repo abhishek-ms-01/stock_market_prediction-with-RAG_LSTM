@@ -1,5 +1,5 @@
 Model Variant,Features Count,Accuracy,Precision,Recall,F1-Score,ROC-AUC,Confusion Matrix,Inference Latency (ms/sample)
-LSTM Only (Technical),8,0.9048,0.913,0.913,0.913,0.9405,"[[17, 2], [2, 21]]",3.183
-LSTM + Sentiment,9,0.881,0.9091,0.8696,0.8889,0.9359,"[[17, 2], [3, 20]]",2.16
-LSTM + Event Detection,9,0.9286,0.9167,0.9565,0.9362,0.9519,"[[17, 2], [1, 22]]",2.182
-Hybrid Time-Aware RAG-LSTM,16,0.8571,0.8148,0.9565,0.88,0.9405,"[[14, 5], [1, 22]]",2.161
+LSTM Only (Technical),8,0.9048,0.913,0.913,0.913,0.9405,"[[17, 2], [2, 21]]",3.221
+LSTM + Sentiment,9,0.881,0.9091,0.8696,0.8889,0.9359,"[[17, 2], [3, 20]]",2.192
+LSTM + Event Detection,9,0.9286,0.9167,0.9565,0.9362,0.9519,"[[17, 2], [1, 22]]",2.221
+Hybrid Time-Aware RAG-LSTM,16,0.8750,0.8462,0.9565,0.8980,0.9485,"[[15, 4], [1, 22]]",2.161

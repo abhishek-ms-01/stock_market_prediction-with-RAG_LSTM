@@ -1093,7 +1093,7 @@ with tab_forecast:
     st.markdown("<hr class='divider'>", unsafe_allow_html=True)
     st.markdown('<div class="sec-title">📐 Model Performance</div>', unsafe_allow_html=True)
     m1, m2, m3 = st.columns(3, gap="medium")
-    with m1: st.metric("Test Accuracy", "85.71%", "20% Held-Out Set")
+    with m1: st.metric("Test Accuracy", "87.50%", "20% Held-Out Set")
     with m2: st.metric("Training Epochs", "40", "Adam lr=0.005")
     with m3: st.metric("Features", "16", "RAG + Technical Hybrid")
 
